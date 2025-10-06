@@ -1,0 +1,1603 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureLog Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* bg-gray-900 */
+        }
+        .sidebar-item.active {
+            background-color: #3b82f6; /* bg-blue-600 */
+            color: white;
+        }
+        .sidebar-item.active svg {
+            color: white;
+        }
+        .tab-item.active, .threat-tab-item.active, .ingestion-tab-item.active {
+            border-bottom: 2px solid #3b82f6;
+            color: #3b82f6;
+        }
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        /* Custom scrollbar for webkit browsers */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937; /* bg-gray-800 */
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563; /* bg-gray-600 */
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280; /* bg-gray-500 */
+        }
+        /* Custom toggle switch */
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #3b82f6;
+        }
+        .toggle-checkbox:checked + .toggle-label::after {
+            transform: translateX(100%);
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .loader {
+            border: 2px solid #374151; /* border-gray-700 */
+            border-top-color: #3b82f6; /* border-blue-600 */
+            border-radius: 50%;
+            width: 1rem;
+            height: 1rem;
+            animation: spin 1s linear infinite;
+        }
+    </style>
+</head>
+<body class="text-gray-300">
+    <div class="flex h-screen bg-gray-900">
+        <!-- Sidebar -->
+        <aside class="w-64 flex-shrink-0 bg-gray-800 flex flex-col">
+            <div class="h-16 flex items-center justify-center px-4 border-b border-gray-700">
+                <svg class="h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                <div class="ml-3">
+                    <h1 class="text-lg font-bold text-white">SecureLog</h1>
+                    <span id="analyzer-version" class="text-xs text-gray-400">Analyzer v2.4.1</span>
+                </div>
+            </div>
+            <nav class="flex-1 overflow-y-auto">
+                <ul class="py-4">
+                    <li><a href="#dashboard" class="sidebar-item flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700 active">
+                        <svg class="h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>Dashboard</a></li>
+                    <li><a href="#log-viewer" class="sidebar-item flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
+                        <svg class="h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>Log Viewer</a></li>
+                    <li><a href="#log-ingestion" class="sidebar-item flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
+                        <svg class="h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>Log Ingestion</a></li>
+                    <li><a href="#threat-detection" class="sidebar-item flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
+                        <svg class="h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>Threat Detection</a></li>
+                    <li><a href="#detection-rules" class="sidebar-item flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
+                        <svg class="h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>Detection Rules</a></li>
+                    <li><a href="#reports" class="sidebar-item flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
+                        <svg class="h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>Reports</a></li>
+                    <li class="px-6 py-3 text-xs uppercase text-gray-500 font-semibold">System</li>
+                    <li><a href="#settings" class="sidebar-item flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
+                        <svg class="h-5 w-5 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>Settings</a></li>
+                </ul>
+            </nav>
+            <div class="p-4 border-t border-gray-700">
+                <div class="flex items-center text-sm">
+                    <span class="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
+                    <span id="system-status">System Online</span>
+                    <span class="ml-auto text-gray-400" id="system-time">2:29 AM</span>
+                </div>
+                <div class="mt-2">
+                    <div class="flex justify-between text-xs text-gray-400">
+                        <span>Storage</span>
+                        <span id="storage-used">2.4 GB / 10 GB</span>
+                    </div>
+                    <div class="w-full bg-gray-600 rounded-full h-1.5 mt-1">
+                        <div class="bg-blue-500 h-1.5 rounded-full" style="width: 24%"></div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main content -->
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <!-- Header -->
+            <header class="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-6">
+                <div class="text-sm text-gray-400">
+                    <span>Last refresh: </span>
+                    <span class="text-gray-300">2 min ago</span>
+                    <button class="ml-2 text-gray-400 hover:text-white">
+                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M20 4l-4 4M4 20l4-4"/></svg>
+                    </button>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="relative">
+                        <input type="text" placeholder="Search logs..." class="bg-gray-700 border border-gray-600 rounded-md py-2 pl-10 pr-4 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </div>
+                    <button class="text-gray-400 hover:text-white relative">
+                        <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                        <span class="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
+                    </button>
+                    <div class="flex items-center">
+                        <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">A</div>
+                        <div class="ml-3 text-sm">
+                            <div class="font-medium text-white">Admin User</div>
+                            <div class="text-gray-400">Security Analyst</div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                <div id="dashboard" class="page-content space-y-6">
+                    <!-- Dashboard Header -->
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center space-x-6 text-sm">
+                            <div class="flex items-center">
+                                <span class="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
+                                <span class="font-semibold text-white">Monitoring Active</span>
+                            </div>
+                            <div class="text-gray-400">Processing: <span class="font-mono text-white">118 logs/sec</span></div>
+                             <div class="text-gray-400">Total Events: <span class="font-mono text-white">8</span></div>
+                        </div>
+                        <button id="export-dashboard-btn" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md flex items-center text-sm">
+                           <svg class="h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                            Export
+                        </button>
+                    </div>
+
+                    <!-- Dashboard Stats -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div class="bg-gray-800 p-6 rounded-lg">
+                            <h3 class="text-sm font-medium text-gray-400 flex items-center">
+                                CRITICAL ALERTS
+                                <svg class="h-5 w-5 text-red-500 ml-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                            </h3>
+                            <p class="text-3xl font-bold text-white mt-2">0</p>
+                            <p class="text-xs text-green-400 mt-1 flex items-center">
+                                <svg class="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                                12% vs last hour
+                            </p>
+                        </div>
+                        <div class="bg-gray-800 p-6 rounded-lg">
+                            <h3 class="text-sm font-medium text-gray-400 flex items-center">
+                                HIGH PRIORITY
+                                <svg class="h-5 w-5 text-yellow-500 ml-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18V3H3zm8 14H7v-2h4v2zm0-4H7v-2h4v2zm0-4H7V7h4v2zm6 8h-4v-2h4v2zm0-4h-4v-2h4v2zm0-4h-4V7h4v2z" /></svg>
+                            </h3>
+                            <p class="text-3xl font-bold text-white mt-2">0</p>
+                             <p class="text-xs text-green-400 mt-1 flex items-center">
+                                <svg class="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                                8% vs last hour
+                            </p>
+                        </div>
+                        <div class="bg-gray-800 p-6 rounded-lg">
+                           <h3 class="text-sm font-medium text-gray-400 flex items-center">
+                                ACTIVE SOURCES
+                               <svg class="h-5 w-5 text-blue-500 ml-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                            </h3>
+                            <p class="text-3xl font-bold text-white mt-2">5</p>
+                            <p class="text-xs text-gray-400 mt-1">3 new in last 24h</p>
+                        </div>
+                        <div class="bg-gray-800 p-6 rounded-lg">
+                            <h3 class="text-sm font-medium text-gray-400 flex items-center">
+                                DETECTION RATE
+                               <svg class="h-5 w-5 text-green-500 ml-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                            </h3>
+                            <p class="text-3xl font-bold text-white mt-2">0%</p>
+                             <p class="text-xs text-green-400 mt-1 flex items-center">
+                                <svg class="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd"></path></svg>
+                                2.1% improvement
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2 bg-gray-800 p-6 rounded-lg">
+                             <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-semibold text-white">Event Timeline</h3>
+                                <div class="flex space-x-1 bg-gray-700 p-1 rounded-md text-xs">
+                                    <button class="px-3 py-1 rounded bg-blue-600">24h</button>
+                                    <button class="px-3 py-1 rounded hover:bg-gray-600">7d</button>
+                                    <button class="px-3 py-1 rounded hover:bg-gray-600">30d</button>
+                                </div>
+                             </div>
+                             <canvas id="eventTimelineChart"></canvas>
+                        </div>
+                        <div class="bg-gray-800 p-6 rounded-lg">
+                             <div class="flex justify-between items-center mb-4">
+                                  <h3 class="text-lg font-semibold text-white">Threat Distribution</h3>
+                                  <a href="#" class="text-sm text-blue-400 hover:underline">View All</a>
+                             </div>
+                             <canvas id="threatDistributionChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-gray-800 p-6 rounded-lg">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-semibold text-white">Recent Critical Alerts</h3>
+                                <a href="#" class="text-sm text-blue-400 hover:underline">View All</a>
+                            </div>
+                            <div class="text-center py-8">
+                                <p class="text-gray-400">No critical alerts to display.</p>
+                            </div>
+                        </div>
+                         <div class="bg-gray-800 p-6 rounded-lg">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-semibold text-white">Top Sources</h3>
+                                <a href="#" class="text-sm text-blue-400 hover:underline">View All</a>
+                            </div>
+                            <ul class="space-y-3">
+                                <li class="flex items-center text-sm">
+                                    <span class="w-2 h-2 bg-green-500 rounded-full mr-3"></span>
+                                    <span class="font-mono text-gray-300">192.168.1.45</span>
+                                    <span class="ml-2 text-gray-500">web-server-01</span>
+                                    <span class="ml-auto text-gray-400">0 alerts</span>
+                                </li>
+                                <li class="flex items-center text-sm">
+                                    <span class="w-2 h-2 bg-green-500 rounded-full mr-3"></span>
+                                    <span class="font-mono text-gray-300">10.0.0.23</span>
+                                    <span class="ml-2 text-gray-500">app-server-03</span>
+                                    <span class="ml-auto text-gray-400">0 alerts</span>
+                                </li>
+                                 <li class="flex items-center text-sm">
+                                    <span class="w-2 h-2 bg-green-500 rounded-full mr-3"></span>
+                                    <span class="font-mono text-gray-300">172.16.0.89</span>
+                                    <span class="ml-2 text-gray-500">db-server-02</span>
+                                    <span class="ml-auto text-gray-400">0 alerts</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                     <div>
+                        <h3 class="text-lg font-semibold text-white mb-4">Quick Log Ingestion</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div class="bg-gray-800 p-6 rounded-lg text-center hover:bg-gray-700/50 cursor-pointer">
+                               <svg class="h-10 w-10 text-blue-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+                                <h4 class="mt-2 text-white font-semibold">Syslog Server</h4>
+                                <p class="text-sm text-gray-400 mt-1">Configure syslog endpoint</p>
+                            </div>
+                             <div class="bg-gray-800 p-6 rounded-lg text-center hover:bg-gray-700/50 cursor-pointer" id="upload-files-btn">
+                                <svg class="h-10 w-10 text-blue-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V7a4 4 0 014-4h2a4 4 0 014 4v2m0 0l-3 3m3-3l3 3m-3-3v6m0 0a4 4 0 01-4 4H7a4 4 0 01-4-4V7" /></svg>
+                                <h4 class="mt-2 text-white font-semibold">File Upload</h4>
+                                <p class="text-sm text-gray-400 mt-1">Upload log files (USB/FTP)</p>
+                            </div>
+                             <div class="bg-gray-800 p-6 rounded-lg text-center hover:bg-gray-700/50 cursor-pointer">
+                                <svg class="h-10 w-10 text-blue-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                                <h4 class="mt-2 text-white font-semibold">Manual Entry</h4>
+                                <p class="text-sm text-gray-400 mt-1">Paste or type log data</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="log-viewer" class="page-content hidden">
+                    <!-- Log Viewer content here -->
+                    <div class="bg-gray-800 p-6 rounded-lg">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-semibold text-white">Log Viewer</h2>
+                             <button id="summarize-logs-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-md flex items-center text-sm">
+                                ✨ Summarize Logs with AI
+                            </button>
+                        </div>
+                        <div class="flex space-x-4 mb-4">
+                            <input type="text" placeholder="Search logs..." class="flex-grow bg-gray-700 border border-gray-600 rounded-md py-2 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                             <input type="datetime-local" class="bg-gray-700 border border-gray-600 rounded-md py-2 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Filter</button>
+                        </div>
+                         <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left text-gray-400" id="log-table">
+                                <thead class="text-xs text-gray-300 uppercase bg-gray-700">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3">Timestamp</th>
+                                        <th scope="col" class="px-6 py-3">Level</th>
+                                        <th scope="col" class="px-6 py-3">Source IP</th>
+                                        <th scope="col" class="px-6 py-3">Message</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="border-b border-gray-700">
+                                        <td class="px-6 py-4">2025-10-05 02:30:15</td>
+                                        <td class="px-6 py-4"><span class="bg-red-500 text-white text-xs font-medium mr-2 px-2.5 py-0.5 rounded">CRITICAL</span></td>
+                                        <td class="px-6 py-4">192.168.1.101</td>
+                                        <td class="px-6 py-4 font-mono">Failed password for root from 192.168.1.101 port 22 ssh2</td>
+                                    </tr>
+                                    <tr class="border-b border-gray-700">
+                                        <td class="px-6 py-4">2025-10-05 02:29:58</td>
+                                        <td class="px-6 py-4"><span class="bg-yellow-500 text-white text-xs font-medium mr-2 px-2.5 py-0.5 rounded">WARNING</span></td>
+                                        <td class="px-6 py-4">10.0.0.53</td>
+                                        <td class="px-6 py-4 font-mono">High memory usage detected on server-db-01</td>
+                                    </tr>
+                                    <tr class="border-b border-gray-700">
+                                        <td class="px-6 py-4">2025-10-05 02:29:46</td>
+                                        <td class="px-6 py-4"><span class="bg-blue-500 text-white text-xs font-medium mr-2 px-2.5 py-0.5 rounded">INFO</span></td>
+                                        <td class="px-6 py-4">172.16.0.10</td>
+                                        <td class="px-6 py-4 font-mono">User 'admin' logged in successfully.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="log-ingestion" class="page-content hidden space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- Syslog Server Card -->
+                        <div class="bg-gray-800 p-6 rounded-lg border border-green-500/50">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h3 class="font-semibold text-white">Syslog Server</h3>
+                                    <p class="text-sm text-gray-400">UDP/TCP endpoint</p>
+                                </div>
+                                <span class="text-xs bg-green-500/50 text-green-300 px-2 py-1 rounded-md">ACTIVE</span>
+                            </div>
+                            <div class="mt-4 text-sm">
+                                <p>Protocol: <span class="font-mono text-gray-300">UDP</span></p>
+                                <p>Port: <span class="font-mono text-gray-300">514</span></p>
+                                <p class="mt-2 text-gray-400">Received today: <span class="text-white">12,847 logs</span></p>
+                            </div>
+                            <button class="mt-4 w-full text-sm text-blue-400 hover:underline">Configure</button>
+                        </div>
+                        <!-- File Upload Card -->
+                        <div class="bg-gray-800 p-6 rounded-lg border border-gray-700">
+                            <h3 class="font-semibold text-white">File Upload</h3>
+                            <p class="text-sm text-gray-400">Batch log files</p>
+                             <p class="text-xs text-gray-500 mt-4">Supported formats: .log, .txt, .json, .csv, .xml</p>
+                            <p class="text-xs text-gray-500">Max 100MB per file</p>
+                            <button id="upload-files-btn-2" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Upload Files</button>
+                        </div>
+                         <!-- Manual Entry Card -->
+                        <div class="bg-gray-800 p-6 rounded-lg border border-gray-700">
+                             <h3 class="font-semibold text-white">Manual Entry</h3>
+                            <p class="text-sm text-gray-400">Direct input</p>
+                            <textarea class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm font-mono h-24 mt-4" placeholder="Paste log entries here (one per line)..."></textarea>
+                            <button class="mt-2 w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Submit Logs</button>
+                        </div>
+                    </div>
+                    
+                     <div class="bg-gray-800 rounded-lg">
+                        <h3 class="px-6 pt-4 text-lg font-semibold text-white">Ingestion Configuration</h3>
+                        <p class="px-6 text-sm text-gray-400">Configure how logs are collected and processed</p>
+                         <div class="border-b border-gray-700 mt-4">
+                             <nav class="-mb-px flex space-x-6 px-6" aria-label="Tabs">
+                                <button class="ingestion-tab-item whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active" data-tab="syslog-settings">Syslog Settings</button>
+                                <button class="ingestion-tab-item whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-gray-400 hover:text-gray-200" data-tab="log-parsing">Log Parsing</button>
+                                <button class="ingestion-tab-item whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-gray-400 hover:text-gray-200" data-tab="pre-filters">Pre-filters</button>
+                            </nav>
+                        </div>
+                        <div class="p-6">
+                            <!-- Syslog Settings Content -->
+                            <div class="ingestion-tab-content" id="syslog-settings-tab">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label class="block text-sm font-medium">Listen Address</label>
+                                        <input type="text" value="0.0.0.0" class="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 font-mono">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium">Port</label>
+                                        <input type="number" value="514" class="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3">
+                                    </div>
+                                     <div>
+                                        <label class="block text-sm font-medium">Protocol</label>
+                                        <select class="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3">
+                                            <option>UDP</option><option>TCP</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium">Max Message Size (bytes)</label>
+                                        <input type="number" value="8192" class="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3">
+                                    </div>
+                                </div>
+                                <div class="mt-4 p-4 bg-green-900/50 text-green-300 text-sm rounded-md">Syslog server is currently running and accepting connections.</div>
+                            </div>
+                            <!-- Log Parsing Content -->
+                            <div class="ingestion-tab-content hidden" id="log-parsing-tab">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label class="block text-sm font-medium">Default Timestamp Format</label>
+                                        <select class="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3"><option>RFC 3339 (ISO 8601)</option></select>
+                                    </div>
+                                     <div>
+                                        <label class="block text-sm font-medium">JSON Field Mapping</label>
+                                        <input type="text" value="message:msg,level:severity" class="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 font-mono">
+                                    </div>
+                                </div>
+                                <div class="mt-6">
+                                     <label class="block text-sm font-medium">Custom Grok Patterns</label>
+                                     <textarea rows="4" class="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 font-mono">APACHE_LOG %{IPORHOST:clientip} %{USER:ident} %{USER:auth} \[%{HTTPDATE:timestamp}\]...</textarea>
+                                </div>
+                            </div>
+                            <!-- Pre-filters Content -->
+                             <div class="ingestion-tab-content hidden" id="pre-filters-tab">
+                                <div class="space-y-6">
+                                    <div>
+                                        <label class="block text-sm font-medium">Source IP Allowlist (CIDR notation)</label>
+                                        <textarea rows="3" class="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 font-mono">192.168.0.0/16
+10.0.0.0/8
+172.16.0.0/12</textarea>
+                                    </div>
+                                     <div>
+                                        <label class="block text-sm font-medium">Message Filters (Regex)</label>
+                                        <textarea rows="3" class="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 font-mono">^(?!.*debug).*$  # Exclude debug messages
+.*error.*|.*failed.* # Include errors and failures</textarea>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-6">
+                                        <div>
+                                            <label class="block text-sm font-medium">Minimum Severity Level</label>
+                                            <select class="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3"><option>INFO</option><option>WARN</option></select>
+                                        </div>
+                                         <div>
+                                            <label class="block text-sm font-medium">Rate Limiting (logs/second)</label>
+                                            <input type="number" value="1000" class="mt-1 w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-6 flex justify-end space-x-4">
+                                <button class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Reset to Defaults</button>
+                                <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Save Configuration</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="threat-detection" class="page-content hidden">
+                    <!-- Threat Detection content -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div class="bg-gray-800 p-6 rounded-lg flex items-center">
+                            <svg class="h-8 w-8 text-red-500 mr-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-400">Active Threats</h3>
+                                <p class="text-2xl font-bold text-white mt-1">0</p>
+                                <p class="text-xs text-gray-400 mt-1">Normal threat level</p>
+                            </div>
+                        </div>
+                        <div class="bg-gray-800 p-6 rounded-lg flex items-center">
+                            <svg class="h-8 w-8 text-red-600 mr-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                             <div>
+                                <h3 class="text-sm font-medium text-gray-400">Critical Incidents</h3>
+                                <p class="text-2xl font-bold text-white mt-1">0</p>
+                            </div>
+                        </div>
+                         <div class="bg-gray-800 p-6 rounded-lg flex items-center">
+                            <svg class="h-8 w-8 text-yellow-500 mr-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18V3H3zm8 14H7v-2h4v2zm0-4H7v-2h4v2zm0-4H7V7h4v2zm6 8h-4v-2h4v2zm0-4h-4v-2h4v2zm0-4h-4V7h4v2z" /></svg>
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-400">High Priority</h3>
+                                <p class="text-2xl font-bold text-white mt-1">0</p>
+                            </div>
+                        </div>
+                        <div class="bg-gray-800 p-6 rounded-lg flex items-center">
+                           <svg class="h-8 w-8 text-green-500 mr-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-400">Detection Rate</h3>
+                                <p class="text-2xl font-bold text-white mt-1">0%</p>
+                                <p class="text-xs text-green-400 mt-1 flex items-center">
+                                    <svg class="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd"></path></svg>
+                                    2.3% this hour
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 bg-gray-800 rounded-lg">
+                        <div class="border-b border-gray-700">
+                             <nav class="-mb-px flex space-x-6 px-6" aria-label="Tabs">
+                                <button class="threat-tab-item whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active" data-tab="active-threats">Active Threats</button>
+                                <button class="threat-tab-item whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-gray-400 hover:text-gray-200" data-tab="attack-patterns">Attack Patterns</button>
+                                <button class="threat-tab-item whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-gray-400 hover:text-gray-200" data-tab="threat-intelligence">Threat Intelligence</button>
+                                <button class="threat-tab-item whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-gray-400 hover:text-gray-200" data-tab="forensics">Forensics</button>
+                            </nav>
+                        </div>
+                        <div class="p-6">
+                            <div class="threat-tab-content grid grid-cols-2 gap-6" id="active-threats-tab">
+                                <div class="bg-gray-900/50 p-6 rounded-lg">
+                                    <h3 class="font-semibold text-white flex items-center"><svg class="h-5 w-5 mr-2 text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>Active Security Threats</h3>
+                                    <p class="text-sm text-gray-400 mt-1">Real-time threat detection and response</p>
+                                    <div class="text-center py-12">
+                                        <svg class="mx-auto h-12 w-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        <h4 class="mt-2 font-semibold text-white">No Active Threats</h4>
+                                        <p class="text-sm text-gray-400">Your system is currently secure.</p>
+                                    </div>
+                                </div>
+                                <div class="bg-gray-900/50 p-6 rounded-lg">
+                                    <h3 class="font-semibold text-white">Threat Summary</h3>
+                                     <p class="text-sm text-gray-400 mt-1">No active threats detected</p>
+                                </div>
+                            </div>
+                             <div class="threat-tab-content hidden" id="attack-patterns-tab">
+                                <h3 class="font-semibold text-white">Attack Pattern Analysis</h3>
+                                <p class="text-sm text-gray-400">Common attack vectors and their frequency</p>
+                                <div class="text-center py-16">
+                                    <p class="text-gray-400">No data available to analyze attack patterns.</p>
+                                </div>
+                            </div>
+                             <div class="threat-tab-content hidden text-center py-16" id="threat-intelligence-tab">
+                                 <svg class="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                <h3 class="mt-2 text-lg font-medium text-white">Threat Intelligence Integration</h3>
+                                <p class="mt-1 text-sm text-gray-400">Connect external threat feeds for enhanced detection.</p>
+                                <div class="mt-6">
+                                    <button type="button" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500">
+                                        Configure Feeds
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="threat-tab-content hidden text-center py-16" id="forensics-tab">
+                                 <svg class="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 10.5a.5.5 0 11-1 0 .5.5 0 011 0z" /><path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10.5a.5.5 0 11-1 0 .5.5 0 011 0z" /></svg>
+                                <h3 class="mt-2 text-lg font-medium text-white">Digital Forensics</h3>
+                                <p class="mt-1 text-sm text-gray-400">Detailed investigation tools and timeline analysis.</p>
+                                <div class="mt-6">
+                                    <button type="button" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500">
+                                        Start Investigation
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="detection-rules" class="page-content hidden">
+                    <div class="space-y-6">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h2 class="text-xl font-semibold text-white">Manage security detection rules and threat patterns</h2>
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                <div class="relative">
+                                    <input type="text" placeholder="Search rules..." class="bg-gray-800 border border-gray-600 rounded-md py-2 pl-10 pr-4 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                </div>
+                                <button id="create-rule-btn-2" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md flex items-center">
+                                    <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                                    Create Rule
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Rule Cards -->
+                        <div class="space-y-4">
+                            <!-- Rule Card 1 -->
+                            <div class="bg-gray-800 rounded-lg p-4 rule-card">
+                                <div class="flex items-start justify-between">
+                                    <div class="flex items-center">
+                                        <svg class="h-6 w-6 text-yellow-400 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                                        <div>
+                                            <h3 class="font-semibold text-white rule-name">SSH Brute Force</h3>
+                                            <p class="text-sm text-gray-400 rule-description">Detects multiple failed SSH login attempts</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-2 text-xs">
+                                        <span class="bg-red-500/50 text-red-300 px-2 py-1 rounded-md">CRITICAL</span>
+                                        <span class="bg-gray-600 text-gray-300 px-2 py-1 rounded-md">signature</span>
+                                        <span class="bg-gray-700 text-gray-400 px-2 py-1 rounded-md">INACTIVE</span>
+                                    </div>
+                                </div>
+                                <div class="mt-4 border-t border-gray-700 pt-4 flex items-center justify-between text-sm">
+                                   <div>
+                                       <p class="text-gray-400">Pattern:</p>
+                                       <p class="font-mono text-gray-300 rule-pattern">Failed password.*ssh|authentication failure.*ssh</p>
+                                   </div>
+                                    <div class="flex items-center space-x-4">
+                                        <button class="text-purple-400 hover:text-purple-300 text-xs font-bold explain-alert-btn">✨ EXPLAIN</button>
+                                        <button class="text-gray-400 hover:text-white" title="Enable Rule"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg></button>
+                                        <button class="text-gray-400 hover:text-white" title="Edit Rule"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"></path><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd"></path></svg></button>
+                                        <button class="text-gray-400 hover:text-red-500" title="Delete Rule"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg></button>
+                                    </div>
+                                </div>
+                            </div>
+
+                             <!-- Rule Card 2 -->
+                            <div class="bg-gray-800 rounded-lg p-4 rule-card">
+                                <div class="flex items-start justify-between">
+                                    <div class="flex items-center">
+                                        <svg class="h-6 w-6 text-yellow-400 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                                        <div>
+                                            <h3 class="font-semibold text-white rule-name">SQL Injection</h3>
+                                            <p class="text-sm text-gray-400 rule-description">Identifies SQL injection patterns</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-2 text-xs">
+                                        <span class="bg-orange-500/50 text-orange-300 px-2 py-1 rounded-md">HIGH</span>
+                                        <span class="bg-gray-600 text-gray-300 px-2 py-1 rounded-md">signature</span>
+                                        <span class="bg-green-500/50 text-green-300 px-2 py-1 rounded-md">ACTIVE</span>
+                                    </div>
+                                </div>
+                                <div class="mt-4 border-t border-gray-700 pt-4 flex items-center justify-between text-sm">
+                                   <div>
+                                       <p class="text-gray-400">Pattern:</p>
+                                       <p class="font-mono text-gray-300 rule-pattern">SELECT.*FROM.*WHERE.*OR.*=.*|UNION.*SELECT|INSERT.*INTO.*VALUES</p>
+                                   </div>
+                                   <div class="flex items-center space-x-4">
+                                        <button class="text-purple-400 hover:text-purple-300 text-xs font-bold explain-alert-btn">✨ EXPLAIN</button>
+                                        <button class="text-gray-400 hover:text-white" title="Disable Rule"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"></path></svg></button>
+                                        <button class="text-gray-400 hover:text-white" title="Edit Rule"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"></path><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd"></path></svg></button>
+                                        <button class="text-gray-400 hover:text-red-500" title="Delete Rule"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="reports" class="page-content hidden">
+                    <div class="space-y-8">
+                         <div>
+                            <div class="flex justify-between items-center mb-4">
+                                <h2 class="text-xl font-semibold text-white">Generate and manage security analysis reports</h2>
+                                <button id="generate-report-btn-2" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md flex items-center">
+                                    <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                                    Generate Report
+                                </button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div class="bg-gray-800 p-6 rounded-lg text-center hover:bg-gray-700/50 cursor-pointer">
+                                    <svg class="h-10 w-10 text-blue-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                    <h3 class="mt-2 text-white font-semibold">Security Summary</h3>
+                                    <p class="text-sm text-gray-400 mt-1">Overall security status and metrics</p>
+                                </div>
+                                <div class="bg-gray-800 p-6 rounded-lg text-center hover:bg-gray-700/50 cursor-pointer">
+                                    <svg class="h-10 w-10 text-red-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    <h3 class="mt-2 text-white font-semibold">Threat Analysis</h3>
+                                    <p class="text-sm text-gray-400 mt-1">Detailed threat and attack analysis</p>
+                                </div>
+                                <div class="bg-gray-800 p-6 rounded-lg text-center hover:bg-gray-700/50 cursor-pointer">
+                                     <svg class="h-10 w-10 text-green-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                                    <h3 class="mt-2 text-white font-semibold">System Health</h3>
+                                    <p class="text-sm text-gray-400 mt-1">System performance and health metrics</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-white mb-4">Generated Reports</h3>
+                            <div class="bg-gray-800 rounded-lg text-center py-12 border-2 border-dashed border-gray-700">
+                                <svg class="mx-auto h-12 w-12 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>
+                                <h3 class="mt-2 text-lg font-medium text-white">No reports generated yet</h3>
+                                <p class="text-gray-400 mt-1">Create your first security report to get started.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="settings" class="page-content hidden">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-xl font-semibold text-white">Configure SecureLog Analyzer system preferences</h2>
+                        <div class="flex space-x-2">
+                             <button class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md flex items-center text-sm">
+                                <svg class="h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
+                                Import Config
+                            </button>
+                             <button class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md flex items-center text-sm">
+                                <svg class="h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                                Export Config
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <div class="border-b border-gray-700">
+                            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                                <button class="tab-item whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active" data-tab="system">System</button>
+                                <button class="tab-item whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-gray-400 hover:text-gray-200" data-tab="security">Security</button>
+                                <button class="tab-item whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-gray-400 hover:text-gray-200" data-tab="integration">Integration</button>
+                                <button class="tab-item whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-gray-400 hover:text-gray-200" data-tab="about">About</button>
+                            </nav>
+                        </div>
+                        <div class="mt-6 space-y-6">
+                            <!-- System Tab Content -->
+                            <div class="tab-content" id="system-tab">
+                                <div class="bg-gray-800 rounded-lg p-6">
+                                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center">
+                                        <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                        Data Management
+                                    </h3>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div>
+                                            <label for="log-retention" class="block text-sm font-medium text-gray-300">Log Retention (days)</label>
+                                            <input type="number" id="log-retention" value="90" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                        </div>
+                                        <div>
+                                            <label for="max-log-size" class="block text-sm font-medium text-gray-300">Max Log File Size (MB)</label>
+                                            <input type="number" id="max-log-size" value="100" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                        </div>
+                                         <div>
+                                            <label for="alert-retention" class="block text-sm font-medium text-gray-300">Alert Retention (days)</label>
+                                            <input type="number" id="alert-retention" value="30" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-gray-800 rounded-lg p-6 mt-6">
+                                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center">
+                                         <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" /></svg>
+                                        Notifications
+                                    </h3>
+                                    <div class="space-y-4">
+                                        <div class="flex items-center justify-between">
+                                            <span class="flex-grow flex flex-col">
+                                                <span class="text-sm font-medium text-white">Real-time Alerts</span>
+                                                <span class="text-sm text-gray-400">Enable real-time alert notifications</span>
+                                            </span>
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                              <input type="checkbox" value="" class="sr-only peer toggle-checkbox" checked>
+                                              <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                            </label>
+                                        </div>
+                                         <div class="flex items-center justify-between">
+                                            <span class="flex-grow flex flex-col">
+                                                <span class="text-sm font-medium text-white">Email Notifications</span>
+                                                <span class="text-sm text-gray-400">Send alerts via email</span>
+                                            </span>
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                              <input type="checkbox" value="" class="sr-only peer toggle-checkbox">
+                                              <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-6 flex justify-end">
+                                    <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Save System Settings</button>
+                                </div>
+                            </div>
+                            <!-- Security Tab Content -->
+                            <div class="tab-content hidden space-y-6" id="security-tab">
+                                 <div class="bg-gray-800 rounded-lg p-6">
+                                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center">
+                                         <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 8a6 6 0 11-12 0 6 6 0 0112 0zM7 8a1 1 0 11-2 0 1 1 0 012 0zm5 0a1 1 0 11-2 0 1 1 0 012 0zM7 13a1 1 0 000 2h6a1 1 0 100-2H7z" clip-rule="evenodd" /></svg>
+                                        Authentication & Access
+                                    </h3>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                        <div>
+                                            <label for="session-timeout" class="block text-sm font-medium text-gray-300">Session Timeout (minutes)</label>
+                                            <input type="number" id="session-timeout" value="30" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3">
+                                        </div>
+                                        <div>
+                                            <label for="max-logins" class="block text-sm font-medium text-gray-300">Max Failed Login Attempts</label>
+                                            <input type="number" id="max-logins" value="5" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3">
+                                        </div>
+                                    </div>
+                                    <div class="space-y-4">
+                                        <div class="flex items-center justify-between">
+                                            <span class="flex-grow flex flex-col">
+                                                <span class="text-sm font-medium text-white">Password Complexity Requirements</span>
+                                                <span class="text-sm text-gray-400">Enforce strong password policies</span>
+                                            </span>
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                              <input type="checkbox" value="" class="sr-only peer toggle-checkbox" checked>
+                                              <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                            </label>
+                                        </div>
+                                        <div class="flex items-center justify-between">
+                                            <span class="flex-grow flex flex-col">
+                                                <span class="text-sm font-medium text-white">Two-Factor Authentication</span>
+                                                <span class="text-sm text-gray-400">Require 2FA for all users</span>
+                                            </span>
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                              <input type="checkbox" value="" class="sr-only peer toggle-checkbox">
+                                              <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-gray-800 rounded-lg p-6">
+                                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center">
+                                         <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z" /></svg>
+                                        Network Security
+                                    </h3>
+                                     <div>
+                                        <label for="allowed-ips" class="block text-sm font-medium text-gray-300">Allowed IP Ranges (CIDR)</label>
+                                        <textarea id="allowed-ips" rows="2" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 font-mono">192.168.0.0/16
+10.0.0.0/8</textarea>
+                                    </div>
+                                </div>
+                                 <div class="mt-6 flex justify-end">
+                                    <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Save Security Settings</button>
+                                </div>
+                            </div>
+                            <!-- Integration Tab Content -->
+                            <div class="tab-content hidden space-y-6" id="integration-tab">
+                                <div class="bg-gray-800 rounded-lg p-6">
+                                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center">
+                                        <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm3 1a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" /></svg>
+                                        Log Sources
+                                    </h3>
+                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div>
+                                            <label for="syslog-port" class="block text-sm font-medium text-gray-300">Syslog Port</label>
+                                            <input id="syslog-port" type="text" value="514" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3">
+                                        </div>
+                                         <div>
+                                            <label for="syslog-proto" class="block text-sm font-medium text-gray-300">Protocol</label>
+                                            <select id="syslog-proto" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3">
+                                                <option>UDP</option>
+                                                <option>TCP</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="mt-6 border-t border-gray-700 pt-6">
+                                         <div class="flex items-center justify-between">
+                                            <span class="flex-grow flex flex-col">
+                                                <span class="text-sm font-medium text-white">File Watcher</span>
+                                                <span class="text-sm text-gray-400">Monitor log files for changes</span>
+                                            </span>
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                              <input type="checkbox" value="" class="sr-only peer toggle-checkbox" checked>
+                                              <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                            </label>
+                                        </div>
+                                        <div class="mt-4">
+                                            <label for="watch-dir" class="block text-sm font-medium text-gray-300">Watch Directory</label>
+                                            <input id="watch-dir" type="text" value="/var/log" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 font-mono">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-gray-800 rounded-lg p-6">
+                                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center">
+                                         <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                                        API Configuration
+                                    </h3>
+                                    <div class="flex items-center justify-between">
+                                        <span class="flex-grow flex flex-col">
+                                            <span class="text-sm font-medium text-white">REST API</span>
+                                            <span class="text-sm text-gray-400">Enable REST API server</span>
+                                        </span>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                          <input type="checkbox" value="" class="sr-only peer toggle-checkbox" checked>
+                                          <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                        </label>
+                                    </div>
+                                     <div class="mt-4">
+                                        <label for="api-port" class="block text-sm font-medium text-gray-300">API Port</label>
+                                        <input id="api-port" type="number" value="8000" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3">
+                                    </div>
+                                </div>
+                                 <div class="mt-6 flex justify-end">
+                                    <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Save Integration Settings</button>
+                                </div>
+                            </div>
+                             <!-- About Tab Content -->
+                            <div class="tab-content hidden" id="about-tab">
+                                <div class="bg-gray-800 rounded-lg p-6">
+                                    <div class="text-center mb-6">
+                                        <h3 class="text-2xl font-bold text-white">SecureLog Analyzer</h3>
+                                        <p class="text-gray-400">Portable Log Analysis Tool</p>
+                                        <p class="text-blue-400 mt-1">v2.4.1</p>
+                                    </div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                                        <div class="flex"><strong class="font-semibold text-white w-24 flex-shrink-0">Build Date:</strong> <span class="text-gray-300">2024-02-04</span></div>
+                                        <div class="flex"><strong class="font-semibold text-white w-24 flex-shrink-0">License:</strong> <span class="text-gray-300">MIT</span></div>
+                                        <div class="flex"><strong class="font-semibold text-white w-24 flex-shrink-0">Platform:</strong> <span class="text-gray-300">Cross-platform</span></div>
+                                        <div class="flex"><strong class="font-semibold text-white w-24 flex-shrink-0">Runtime:</strong> <span class="text-gray-300">Node.js + React</span></div>
+                                    </div>
+                                    <div class="mt-6 border-t border-gray-700 pt-6">
+                                        <h4 class="font-semibold text-white mb-3">Features</h4>
+                                        <ul class="space-y-2 text-sm text-gray-300 list-disc list-inside">
+                                            <li>Multi-source log ingestion (Syslog, File Upload, Manual Entry)</li>
+                                            <li>Real-time threat detection and alerting</li>
+                                            <li>Advanced log parsing and normalization</li>
+                                            <li>Interactive security dashboard</li>
+                                            <li>Anomaly detection using statistical analysis</li>
+                                            <li>Offline-first architecture</li>
+                                            <li>Report generation (PDF/CSV export)</li>
+                                            <li>Rule-based threat detection engine</li>
+                                        </ul>
+                                    </div>
+                                    <div class="text-center mt-8 text-xs text-gray-500">
+                                        &copy; 2024 SecureLog Analyzer. All rights reserved.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <!-- Create Detection Rule Modal -->
+    <div id="create-rule-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg m-4 border border-gray-700">
+            <div class="p-6 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-white">Create Detection Rule</h3>
+                <button id="close-rule-modal" class="text-gray-400 hover:text-white">&times;</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300">Describe the threat to detect</label>
+                    <div class="mt-1 flex rounded-md shadow-sm">
+                        <textarea id="ai-rule-description" rows="2" class="flex-1 block w-full bg-gray-700 border border-gray-600 rounded-none rounded-l-md py-2 px-3" placeholder="e.g., 'Detects when a user tries to access a sensitive file outside of business hours'"></textarea>
+                        <button id="generate-rule-btn" type="button" class="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-600 bg-purple-600 text-white text-sm font-medium hover:bg-purple-700">
+                            ✨ Generate with AI
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300">Rule Name</label>
+                        <input id="rule-name-input" type="text" placeholder="e.g., SSH Brute Force" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300">Severity</label>
+                        <select class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3">
+                            <option>Low</option>
+                            <option selected>Medium</option>
+                            <option>High</option>
+                            <option>Critical</option>
+                        </select>
+                    </div>
+                </div>
+                 <div>
+                    <label class="block text-sm font-medium text-gray-300">Description</label>
+                    <textarea id="rule-description-input" placeholder="Describe what this rule detects..." rows="2" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3"></textarea>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300">Rule Type</label>
+                        <select class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3">
+                            <option selected>Signature-based</option>
+                            <option>Anomaly Detection</option>
+                            <option>Heuristic</option>
+                            <option>Behavioral</option>
+                        </select>
+                    </div>
+                    <div class="pt-6">
+                         <div class="flex items-center">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                              <input type="checkbox" value="" class="sr-only peer toggle-checkbox" checked>
+                              <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                              <span class="ml-3 text-sm font-medium text-gray-300">Active Rule</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                 <div>
+                    <label class="block text-sm font-medium text-gray-300">Detection Pattern (Regex)</label>
+                    <input id="rule-pattern-input" type="text" placeholder="e.g., Failed password.*ssh|authentication failure.*ssh" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 font-mono">
+                </div>
+            </div>
+            <div class="p-6 bg-gray-900/50 rounded-b-lg flex justify-end space-x-4">
+                <button id="cancel-rule-modal" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Cancel</button>
+                <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Create Rule</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Generate Report Modal -->
+    <div id="generate-report-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg m-4 border border-gray-700">
+            <div class="p-6 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-white">Generate New Report</h3>
+                <button id="close-report-modal" class="text-gray-400 hover:text-white">&times;</button>
+            </div>
+            <div class="p-6 space-y-4">
+                 <div>
+                    <label class="block text-sm font-medium text-gray-300">Report Title</label>
+                    <input type="text" placeholder="e.g., Weekly Security Summary" class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300">Report Type</label>
+                    <select class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3">
+                        <option>Security Summary</option>
+                        <option>Threat Analysis</option>
+                        <option>System Health</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300">Format</label>
+                    <select class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3">
+                        <option>PDF</option>
+                        <option>CSV</option>
+                        <option>JSON</option>
+                    </select>
+                </div>
+                 <div class="flex items-center">
+                    <input id="ai-summary-checkbox" type="checkbox" class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
+                    <label for="ai-summary-checkbox" class="ml-2 block text-sm text-gray-300">✨ Include AI-Generated Executive Summary</label>
+                </div>
+            </div>
+            <div class="p-6 bg-gray-900/50 rounded-b-lg flex justify-end space-x-4">
+                <button id="cancel-report-modal" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Cancel</button>
+                <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Generate</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Files Modal -->
+    <div id="upload-files-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg m-4 border border-gray-700">
+            <div class="p-6 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-white">Upload Log Files</h3>
+                <button id="close-upload-modal" class="text-gray-400 hover:text-white">&times;</button>
+            </div>
+            <div class="p-6 text-center">
+                <h4 class="text-white">Support for multiple file formats</h4>
+                <div class="mt-4 border-2 border-dashed border-gray-600 rounded-lg p-12 flex flex-col items-center justify-center">
+                    <svg class="h-12 w-12 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V7a4 4 0 014-4h2a4 4 0 014 4v2m0 0l-3 3m3-3l3 3m-3-3v6m0 0a4 4 0 01-4 4H7a4 4 0 01-4-4V7" /></svg>
+                    <p class="mt-4 text-white">Drop files here or click to browse</p>
+                    <p class="text-xs text-gray-400 mt-1">Supports: .log, .txt, .json, .csv, .xml (Max 100MB each)</p>
+                </div>
+            </div>
+            <div class="p-6 bg-gray-900/50 rounded-b-lg flex justify-end space-x-4">
+                <button id="cancel-upload-modal" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Cancel</button>
+                <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md opacity-50 cursor-not-allowed">Process Files</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Response Modal -->
+    <div id="ai-response-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl m-4 border border-gray-700 flex flex-col" style="max-height: 80vh;">
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center flex-shrink-0">
+                <h3 class="text-lg font-semibold text-white flex items-center">
+                    <span class="text-purple-400 mr-2">✨</span>
+                    <span id="ai-modal-title">AI Analysis</span>
+                </h3>
+                <button id="close-ai-modal" class="text-gray-400 hover:text-white">&times;</button>
+            </div>
+            <div id="ai-modal-content" class="p-6 overflow-y-auto prose prose-invert prose-sm max-w-none">
+                <!-- AI content will be injected here -->
+                <div class="flex items-center justify-center h-32">
+                    <div class="loader"></div>
+                </div>
+            </div>
+            <div class="p-4 bg-gray-900/50 rounded-b-lg flex justify-end flex-shrink-0">
+                <button id="copy-ai-response" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md text-sm">Copy</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Export Options Modal -->
+    <div id="export-modal" class="fixed inset-0 z-50 items-center justify-center hidden modal-backdrop">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md m-4 border border-gray-700">
+            <div class="p-6 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-white">Export Options</h3>
+                <button id="close-export-modal" class="text-gray-400 hover:text-white">&times;</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-gray-400">Choose what you would like to export.</p>
+                <button id="export-logs-csv-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-md flex items-center justify-center text-sm">
+                    <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    Export Loaded Logs (CSV)
+                </button>
+                <button id="package-local-files-btn" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-md flex items-center justify-center text-sm">
+                    <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    Package Local Files (ZIP)
+                </button>
+            </div>
+        </div>
+    </div>
+    <input type="file" id="local-file-picker" multiple style="display: none;" />
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- Page Navigation ---
+            const sidebarItems = document.querySelectorAll('.sidebar-item');
+            const pageContents = document.querySelectorAll('.page-content');
+
+            sidebarItems.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    
+                    // Update active link
+                    sidebarItems.forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+
+                    // Show correct page
+                    const targetId = item.getAttribute('href').substring(1);
+                    pageContents.forEach(content => {
+                        if (content.id === targetId) {
+                            content.classList.remove('hidden');
+                        } else {
+                            content.classList.add('hidden');
+                        }
+                    });
+                     // Special case for settings to ensure first tab is shown
+                    if (targetId === 'settings') {
+                        document.querySelector('.tab-item').click();
+                    }
+                     // Special case for threat detection to ensure first tab is shown
+                    if (targetId === 'threat-detection') {
+                        document.querySelector('.threat-tab-item').click();
+                    }
+                    // Special case for log ingestion to ensure first tab is shown
+                    if (targetId === 'log-ingestion') {
+                        document.querySelector('.ingestion-tab-item').click();
+                    }
+                });
+            });
+
+            // --- Settings Tabs ---
+            const tabItems = document.querySelectorAll('.tab-item');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            tabItems.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // Update active tab
+                    tabItems.forEach(t => {
+                        t.classList.remove('active', 'text-blue-500');
+                        t.classList.add('text-gray-400', 'hover:text-gray-200');
+                    });
+                    tab.classList.add('active', 'text-blue-500');
+                    tab.classList.remove('text-gray-400', 'hover:text-gray-200');
+
+
+                    // Show correct tab content
+                    const targetTabId = tab.dataset.tab + '-tab';
+                    tabContents.forEach(content => {
+                        if (content.id === targetTabId) {
+                            content.classList.remove('hidden');
+                        } else {
+                            content.classList.add('hidden');
+                        }
+                    });
+                });
+            });
+
+            // --- Threat Detection Tabs ---
+            const threatTabItems = document.querySelectorAll('.threat-tab-item');
+            const threatTabContents = document.querySelectorAll('.threat-tab-content');
+
+            threatTabItems.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // Update active tab
+                     threatTabItems.forEach(t => {
+                        t.classList.remove('active', 'text-blue-500');
+                        t.classList.add('text-gray-400', 'hover:text-gray-200');
+                    });
+                    tab.classList.add('active', 'text-blue-500');
+                    tab.classList.remove('text-gray-400', 'hover:text-gray-200');
+
+                    // Show correct tab content
+                    const targetTabId = tab.dataset.tab + '-tab';
+                    threatTabContents.forEach(content => {
+                        if (content.id === targetTabId) {
+                            content.classList.remove('hidden');
+                        } else {
+                            content.classList.add('hidden');
+                        }
+                    });
+                });
+            });
+
+            // --- Ingestion Config Tabs ---
+            const ingestionTabItems = document.querySelectorAll('.ingestion-tab-item');
+            const ingestionTabContents = document.querySelectorAll('.ingestion-tab-content');
+
+            ingestionTabItems.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // Update active tab
+                     ingestionTabItems.forEach(t => {
+                        t.classList.remove('active', 'text-blue-500');
+                        t.classList.add('text-gray-400', 'hover:text-gray-200');
+                    });
+                    tab.classList.add('active', 'text-blue-500');
+                    tab.classList.remove('text-gray-400', 'hover:text-gray-200');
+
+                    // Show correct tab content
+                    const targetTabId = tab.dataset.tab + '-tab';
+                    ingestionTabContents.forEach(content => {
+                        if (content.id === targetTabId) {
+                            content.classList.remove('hidden');
+                        } else {
+                            content.classList.add('hidden');
+                        }
+                    });
+                });
+            });
+
+
+            // --- Modal Logic ---
+            const createRuleBtn = document.getElementById('create-rule-btn-2');
+            const createRuleModal = document.getElementById('create-rule-modal');
+            const closeRuleModalBtn = document.getElementById('close-rule-modal');
+            const cancelRuleModalBtn = document.getElementById('cancel-rule-modal');
+            
+            const generateReportBtn = document.getElementById('generate-report-btn-2');
+            const generateReportModal = document.getElementById('generate-report-modal');
+            const closeReportModalBtn = document.getElementById('close-report-modal');
+            const cancelReportModalBtn = document.getElementById('cancel-report-modal');
+            
+            const uploadFilesBtn1 = document.getElementById('upload-files-btn');
+            const uploadFilesBtn2 = document.getElementById('upload-files-btn-2');
+            const uploadFilesModal = document.getElementById('upload-files-modal');
+            const closeUploadModalBtn = document.getElementById('close-upload-modal');
+            const cancelUploadModalBtn = document.getElementById('cancel-upload-modal');
+            
+            const aiResponseModal = document.getElementById('ai-response-modal');
+            const closeAiModalBtn = document.getElementById('close-ai-modal');
+
+            const openExportModalBtn = document.getElementById('export-dashboard-btn');
+            const exportModal = document.getElementById('export-modal');
+            const closeExportModalBtn = document.getElementById('close-export-modal');
+
+
+            const openModal = (modal) => {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            };
+
+            const closeModal = (modal) => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            };
+
+            if (createRuleBtn) createRuleBtn.addEventListener('click', () => openModal(createRuleModal));
+            if (closeRuleModalBtn) closeRuleModalBtn.addEventListener('click', () => closeModal(createRuleModal));
+            if (cancelRuleModalBtn) cancelRuleModalBtn.addEventListener('click', () => closeModal(createRuleModal));
+
+            if (generateReportBtn) generateReportBtn.addEventListener('click', () => openModal(generateReportModal));
+            if (closeReportModalBtn) closeReportModalBtn.addEventListener('click', () => closeModal(generateReportModal));
+            if (cancelReportModalBtn) cancelReportModalBtn.addEventListener('click', () => closeModal(generateReportModal));
+
+            if (uploadFilesBtn1) uploadFilesBtn1.addEventListener('click', () => openModal(uploadFilesModal));
+            if (uploadFilesBtn2) uploadFilesBtn2.addEventListener('click', () => openModal(uploadFilesModal));
+            if (closeUploadModalBtn) closeUploadModalBtn.addEventListener('click', () => closeModal(uploadFilesModal));
+            if (cancelUploadModalBtn) cancelUploadModalBtn.addEventListener('click', () => closeModal(uploadFilesModal));
+            
+            if (closeAiModalBtn) closeAiModalBtn.addEventListener('click', () => closeModal(aiResponseModal));
+            
+            if (openExportModalBtn) openExportModalBtn.addEventListener('click', () => openModal(exportModal));
+            if (closeExportModalBtn) closeExportModalBtn.addEventListener('click', () => closeModal(exportModal));
+
+
+            // Close modal on backdrop click
+            window.addEventListener('click', (event) => {
+                if (event.target === createRuleModal) closeModal(createRuleModal);
+                if (event.target === generateReportModal) closeModal(generateReportModal);
+                if (event.target === uploadFilesModal) closeModal(uploadFilesModal);
+                if (event.target === aiResponseModal) closeModal(aiResponseModal);
+                if (event.target === exportModal) closeModal(exportModal);
+            });
+
+            // --- System Time Update ---
+            const systemTimeEl = document.getElementById('system-time');
+            function updateTime() {
+                if (systemTimeEl) {
+                    const now = new Date();
+                    systemTimeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                }
+            }
+            updateTime();
+            setInterval(updateTime, 60000);
+            
+            // --- Chart.js ---
+            const threatsCtx = document.getElementById('eventTimelineChart')?.getContext('2d');
+            if (threatsCtx) {
+                new Chart(threatsCtx, {
+                    type: 'line',
+                    data: {
+                        labels: ['05:00', '08:00', '11:00', '14:00', '17:00', '20:00', '23:00', '02:00'],
+                        datasets: [
+                        {
+                            label: 'Critical',
+                            data: [65, 59, 80, 81, 56, 55, 40, 60],
+                            borderColor: 'rgba(239, 68, 68, 1)',
+                            backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: true,
+                        },
+                        {
+                            label: 'High',
+                            data: [85, 79, 100, 101, 76, 75, 60, 82],
+                             borderColor: 'rgba(249, 115, 22, 1)',
+                             backgroundColor: 'rgba(249, 115, 22, 0.2)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: true,
+                        },
+                        {
+                            label: 'Medium',
+                            data: [180, 192, 170, 210, 160, 155, 140, 185],
+                             borderColor: 'rgba(234, 179, 8, 1)',
+                            backgroundColor: 'rgba(234, 179, 8, 0.2)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: true,
+                        }
+                    ]
+                    },
+                    options: {
+                        scales: { 
+                            y: { 
+                                beginAtZero: true,
+                                grid: { color: 'rgba(255,255,255,0.1)'},
+                                ticks: { color: '#9ca3af'}
+                            },
+                             x: { 
+                                grid: { color: 'rgba(255,255,255,0.1)'},
+                                ticks: { color: '#9ca3af'}
+                            }
+                        },
+                        plugins: { 
+                            legend: { 
+                                display: true,
+                                position: 'bottom',
+                                labels: {
+                                    color: '#d1d5db'
+                                }
+                            } 
+                        }
+                    }
+                });
+            }
+
+            const severityCtx = document.getElementById('threatDistributionChart')?.getContext('2d');
+            if(severityCtx) {
+                 new Chart(severityCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Critical', 'High', 'Medium', 'Low'],
+                        datasets: [{
+                            label: 'Threat Severity',
+                            data: [5, 10, 20, 65],
+                            backgroundColor: [
+                                'rgba(239, 68, 68, 0.8)',
+                                'rgba(249, 115, 22, 0.8)',
+                                'rgba(234, 179, 8, 0.8)',
+                                'rgba(59, 130, 246, 0.8)'
+                            ],
+                            borderColor: '#1f2937',
+                            borderWidth: 2
+                        }]
+                    },
+                     options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: '#d1d5db' // text-gray-300
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // --- Gemini API Integration ---
+            const aiModalTitle = document.getElementById('ai-modal-title');
+            const aiModalContent = document.getElementById('ai-modal-content');
+            const copyAiResponseBtn = document.getElementById('copy-ai-response');
+
+            const loadingSpinner = `<div class="flex items-center justify-center h-32"><div class="loader"></div></div>`;
+
+            async function callGeminiAPI(prompt, systemPrompt = "") {
+                const apiKey = ""; 
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                const payload = {
+                    contents: [{ parts: [{ text: prompt }] }],
+                };
+
+                if (systemPrompt) {
+                     payload.systemInstruction = { parts: [{ text: systemPrompt }] };
+                }
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error.message || `API Error: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    
+                    if (!text) {
+                        throw new Error("No content received from AI.");
+                    }
+                    return text;
+
+                } catch (error) {
+                    console.error("Gemini API call failed:", error);
+                    return `<p class="text-red-400">Error: Could not get a response from the AI. ${error.message}</p>`;
+                }
+            }
+
+            // 1. Explain Alert with AI
+            document.querySelectorAll('.explain-alert-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const ruleCard = e.target.closest('.rule-card');
+                    const ruleName = ruleCard.querySelector('.rule-name').textContent;
+                    const ruleDescription = ruleCard.querySelector('.rule-description').textContent;
+                    const rulePattern = ruleCard.querySelector('.rule-pattern').textContent;
+
+                    aiModalTitle.textContent = `AI Analysis for "${ruleName}"`;
+                    aiModalContent.innerHTML = loadingSpinner;
+                    openModal(aiResponseModal);
+
+                    const systemPrompt = "You are a senior cybersecurity analyst. Your goal is to explain security concepts clearly to junior analysts. Use markdown for formatting.";
+                    const prompt = `Explain the following security detection rule in simple terms. Describe what kind of threat it detects, why it's important, and provide a numbered list of concrete remediation steps a developer or system administrator should take.\n\nRule Name: ${ruleName}\nDescription: ${ruleDescription}\nPattern: ${rulePattern}`;
+                    
+                    const response = await callGeminiAPI(prompt, systemPrompt);
+                    aiModalContent.innerHTML = response.replace(/\n/g, '<br>'); // Simple markdown conversion
+                });
+            });
+
+            // 2. Summarize Logs with AI
+            document.getElementById('summarize-logs-btn').addEventListener('click', async () => {
+                const logRows = Array.from(document.querySelectorAll('#log-table tbody tr'));
+                const logData = logRows.map(row => row.innerText.replace(/\t/g, ' | ')).join('\n');
+
+                if (!logData.trim()) {
+                    // Replace with a better notification if available
+                    const tempAlert = document.createElement('div');
+                    tempAlert.textContent = 'No logs to summarize.';
+                    tempAlert.className = 'fixed top-5 right-5 bg-red-500 text-white py-2 px-4 rounded-lg shadow-lg';
+                    document.body.appendChild(tempAlert);
+                    setTimeout(() => tempAlert.remove(), 3000);
+                    return;
+                }
+                
+                aiModalTitle.textContent = 'AI Log Summary';
+                aiModalContent.innerHTML = loadingSpinner;
+                openModal(aiResponseModal);
+
+                const systemPrompt = "You are a log analysis expert. Your task is to provide concise, actionable insights.";
+                const prompt = `Summarize the key events, errors, and potential security issues from the following log entries. Provide a brief, high-level overview in a few bullet points.\n\nLogs:\n${logData}`;
+
+                const response = await callGeminiAPI(prompt, systemPrompt);
+                aiModalContent.innerHTML = response.replace(/\n/g, '<br>');
+            });
+
+            // 3. Generate Rule with AI
+            document.getElementById('generate-rule-btn').addEventListener('click', async (e) => {
+                const description = document.getElementById('ai-rule-description').value;
+                if (!description.trim()) {
+                    // Replace with a better notification if available
+                    const tempAlert = document.createElement('div');
+                    tempAlert.textContent = 'Please describe the threat you want to detect.';
+                    tempAlert.className = 'fixed top-5 right-5 bg-yellow-500 text-white py-2 px-4 rounded-lg shadow-lg';
+                    document.body.appendChild(tempAlert);
+                    setTimeout(() => tempAlert.remove(), 3000);
+                    return;
+                }
+
+                const button = e.target.closest('button');
+                button.disabled = true;
+                button.innerHTML = '<div class="loader mx-auto"></div>';
+
+                const systemPrompt = "You are a cybersecurity expert specializing in writing detection rules. Your output must be only the regular expression (regex) pattern and nothing else. Do not include any explanation or formatting.";
+                const prompt = `Based on the following description, generate a regular expression (regex) pattern that can be used to detect this threat.\n\nDescription: "${description}"`;
+
+                const regex = await callGeminiAPI(prompt, systemPrompt);
+
+                document.getElementById('rule-pattern-input').value = regex.trim();
+                document.getElementById('rule-description-input').value = description;
+                 document.getElementById('rule-name-input').value = "New AI-Generated Rule";
+
+
+                button.disabled = false;
+                button.innerHTML = '✨ Generate with AI';
+            });
+            
+            // 4. Export Functionality
+            const exportLogsCsvBtn = document.getElementById('export-logs-csv-btn');
+            const packageLocalFilesBtn = document.getElementById('package-local-files-btn');
+            const localFilePicker = document.getElementById('local-file-picker');
+
+            if (exportLogsCsvBtn) {
+                exportLogsCsvBtn.addEventListener('click', async () => {
+                    const originalContent = exportLogsCsvBtn.innerHTML;
+                    exportLogsCsvBtn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Exporting...`;
+                    exportLogsCsvBtn.disabled = true;
+                    packageLocalFilesBtn.disabled = true;
+
+                    try {
+                        const zip = new JSZip();
+                        const logTable = document.getElementById('log-table');
+                        if (logTable) {
+                            let csvContent = [Array.from(logTable.querySelectorAll('thead th')).map(h => `"${h.textContent}"`).join(',')];
+                            logTable.querySelectorAll('tbody tr').forEach(row => {
+                                csvContent.push(Array.from(row.querySelectorAll('td')).map(cell => `"${cell.textContent.trim()}"`).join(','));
+                            });
+                            zip.file("logs/securelog_data.csv", csvContent.join('\n'));
+                        }
+                        const systemInfo = `SecureLog Analyzer Export\nVersion: ${document.getElementById('analyzer-version')?.textContent||'N/A'}\nExport Date: ${new Date().toUTCString()}\nStorage Used: ${document.getElementById('storage-used')?.textContent||'N/A'}\nSystem Status: ${document.getElementById('system-status')?.textContent||'N/A'}\n`;
+                        zip.file("system_info.txt", systemInfo);
+                        zip.file("README.md", "This zip file contains logs and system info exported from the SecureLog Analyzer application.");
+                        
+                        const blob = await zip.generateAsync({ type: "blob" });
+                        const link = document.createElement("a");
+                        link.href = URL.createObjectURL(blob);
+                        link.download = `SecureLog_Export_${new Date().toISOString().slice(0,19).replace('T','_').replace(/:/g,'-')}.zip`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(link.href);
+                    } catch (error) {
+                        console.error("Failed to generate log export:", error);
+                    } finally {
+                        exportLogsCsvBtn.innerHTML = `<svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>Export Loaded Logs (CSV)`;
+                        exportLogsCsvBtn.disabled = false;
+                        packageLocalFilesBtn.disabled = false;
+                        closeModal(exportModal);
+                    }
+                });
+            }
+
+            if (packageLocalFilesBtn) {
+                packageLocalFilesBtn.addEventListener('click', () => localFilePicker.click());
+            }
+
+            if (localFilePicker) {
+                localFilePicker.addEventListener('change', async (event) => {
+                    const files = event.target.files;
+                    if (!files || files.length === 0) return;
+
+                    const originalContent = packageLocalFilesBtn.innerHTML;
+                    packageLocalFilesBtn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Packaging...`;
+                    packageLocalFilesBtn.disabled = true;
+                    exportLogsCsvBtn.disabled = true;
+
+                    try {
+                        const zip = new JSZip();
+                        const filePromises = Array.from(files).map(file => new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = e => { zip.file(file.name, e.target.result); resolve(); };
+                            reader.onerror = reject;
+                            reader.readAsArrayBuffer(file);
+                        }));
+                        await Promise.all(filePromises);
+
+                        const blob = await zip.generateAsync({ type: "blob" });
+                        const link = document.createElement("a");
+                        link.href = URL.createObjectURL(blob);
+                        link.download = `Local_Files_Package_${new Date().toISOString().slice(0,19).replace('T','_').replace(/:/g,'-')}.zip`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(link.href);
+                    } catch (error) {
+                        console.error("Failed to package local files:", error);
+                    } finally {
+                        packageLocalFilesBtn.innerHTML = `<svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>Package Local Files (ZIP)`;
+                        packageLocalFilesBtn.disabled = false;
+                        exportLogsCsvBtn.disabled = false;
+                        event.target.value = '';
+                        closeModal(exportModal);
+                    }
+                });
+            }
+
+
+            // Copy AI Response
+            copyAiResponseBtn.addEventListener('click', () => {
+                 const textToCopy = aiModalContent.innerText;
+                 const textArea = document.createElement('textarea');
+                 textArea.value = textToCopy;
+                 document.body.appendChild(textArea);
+                 textArea.select();
+                 try {
+                     document.execCommand('copy');
+                     copyAiResponseBtn.textContent = 'Copied!';
+                     setTimeout(() => { copyAiResponseBtn.textContent = 'Copy'; }, 2000);
+                 } catch (err) {
+                     console.error('Failed to copy text: ', err);
+                 }
+                 document.body.removeChild(textArea);
+            });
+        });
+    </script>
+</body>
+</html>
